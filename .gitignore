@@ -1,0 +1,15 @@
+# Virtuelle Umgebung
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Lokale Datenbank
+db.sqlite3
+
+# Secrets
+.env
+
+# IDE (PyCharm)
+.idea/
