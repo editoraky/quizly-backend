@@ -69,3 +69,58 @@ class RegistrationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(User.objects.count(), 1)
+
+
+class LoginTests(APITestCase):
+    """Verify that login issues JWTs as HttpOnly cookies, not in the body."""
+
+    def setUp(self):
+        """Provide the endpoint URL and an already registered user."""
+        self.url = reverse("login")
+        self.user = User.objects.create_user(
+            username="tester",
+            email="tester@example.com",
+            password="secret123",
+        )
+        self.credentials = {"username": "tester", "password": "secret123"}
+
+    def test_login_returns_the_user_data(self):
+        """Valid credentials return 200 and a user object."""
+        response = self.client.post(self.url, self.credentials, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("detail", response.data)
+        self.assertEqual(response.data["user"]["id"], self.user.id)
+        self.assertEqual(response.data["user"]["username"], "tester")
+        self.assertEqual(response.data["user"]["email"], "tester@example.com")
+
+    def test_login_sets_both_token_cookies(self):
+        """Both tokens are handed over as cookies, not as body fields."""
+        response = self.client.post(self.url, self.credentials, format="json")
+
+        self.assertIn("access_token", response.cookies)
+        self.assertIn("refresh_token", response.cookies)
+
+    def test_token_cookies_are_httponly(self):
+        """JavaScript must never be able to read the tokens."""
+        response = self.client.post(self.url, self.credentials, format="json")
+
+        self.assertTrue(response.cookies["access_token"]["httponly"])
+        self.assertTrue(response.cookies["refresh_token"]["httponly"])
+
+    def test_tokens_are_absent_from_the_response_body(self):
+        """The body carries no token, so no script can pick one up."""
+        response = self.client.post(self.url, self.credentials, format="json")
+
+        self.assertNotIn("access", response.data)
+        self.assertNotIn("refresh", response.data)
+
+    def test_wrong_password_is_rejected(self):
+        """Invalid credentials return 401 and set no cookies."""
+        self.credentials["password"] = "wrong123"
+
+        response = self.client.post(self.url, self.credentials, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn("access_token", response.cookies)
+        self.assertNotIn("refresh_token", response.cookies)
