@@ -7,8 +7,9 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from auth_app.api.serializers import RegistrationSerializer
-from auth_app.api.utils import set_auth_cookies
+from .services import blacklist_token
+from .serializers import RegistrationSerializer
+from .utils import set_auth_cookies, delete_auth_cookies
 
 
 class RegistrationView(APIView):
@@ -49,3 +50,17 @@ class LoginView(TokenObtainPairView):
             token_response.data["access"],
             token_response.data["refresh"],
         )
+
+
+class LogoutView(APIView):
+    """Loggt den User aus: blacklistet den Refresh-Token, löscht beide Cookies."""
+
+    def post(self, request):
+        """Liest den Refresh aus dem Cookie, blacklistet ihn, leert die Cookies."""
+        refresh_token = request.COOKIES["refresh_token"]
+        blacklist_token(refresh_token)
+
+        response = Response({"detail": "Logout successful!"}, status=status.HTTP_200_OK)
+        delete_auth_cookies(response)
+        return response
+    

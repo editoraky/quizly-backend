@@ -27,3 +27,9 @@ def set_auth_cookies(response, access_token, refresh_token):
         jwt_settings["REFRESH_TOKEN_LIFETIME"],
     )
     return response
+
+
+def delete_auth_cookies(response):
+    """Löscht beide Auth-Cookies (Spiegel zu set_auth_cookies)."""
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")

@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 
 
 class RegistrationTests(APITestCase):
@@ -124,3 +125,30 @@ class LoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertNotIn("access_token", response.cookies)
         self.assertNotIn("refresh_token", response.cookies)
+
+
+class LogoutTests(APITestCase):
+    """Testet den Logout-Endpoint: 200 + beide Auth-Cookies gelöscht."""
+
+    def setUp(self):
+        """Legt einen User an und loggt ihn ein, damit der Client die Cookies hält."""
+        self.user = User.objects.create_user(
+            username="tester", email="t@test.de", password="Passwort123"
+        )
+        self.client.post(reverse("login"), {"username": "tester", "password": "Passwort123"})
+
+    def test_logout_returns_200_and_deletes_both_cookies(self):
+        """Logout antwortet mit 200 und leert access_token und refresh_token."""
+        response = self.client.post(reverse("logout"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.cookies["access_token"].value, "")
+        self.assertEqual(response.cookies["refresh_token"].value, "")
+
+    def test_logout_blacklists_the_refresh_token(self):
+        """Nach dem Logout steht genau ein Refresh-Token auf der Blacklist."""
+        self.assertEqual(BlacklistedToken.objects.count(), 0)
+
+        self.client.post(reverse("logout"))
+
+        self.assertEqual(BlacklistedToken.objects.count(), 1)
