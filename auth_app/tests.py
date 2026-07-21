@@ -179,6 +179,20 @@ class LogoutTests(APITestCase):
         self.assertEqual(response.cookies["access_token"].value, "")
         self.assertEqual(response.cookies["refresh_token"].value, "")
 
+    def test_refresh_impossible_after_logout(self):
+        """Beweist end-to-end: nach Logout ist der Refresh-Token geblacklistet → erneuter Refresh damit ergibt 401."""
+        # den Token-WERT sichern, BEVOR der Logout das Cookie leert — danach käme man nicht mehr dran
+        refresh_token = self.client.cookies["refresh_token"].value
+
+        # ausloggen: blacklistet genau diesen Token und leert beide Cookies
+        self.client.post(reverse("logout"))
+
+        # den gesicherten (jetzt toten) Token erneut vorlegen
+        self.client.cookies["refresh_token"] = refresh_token
+        response = self.client.post(reverse("token_refresh"))
+
+        self.assertEqual(response.status_code, 401)
+
 
 class TokenRefreshTests(APITestCase):
     """Tests für POST /api/token/refresh/ — Access-Token aus dem refresh_token-Cookie erneuern."""
