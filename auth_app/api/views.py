@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.exceptions import TokenError
 
 from .services import blacklist_token
 from .serializers import RegistrationSerializer
@@ -56,11 +57,17 @@ class LogoutView(APIView):
     """Loggt den User aus: blacklistet den Refresh-Token, löscht beide Cookies."""
 
     def post(self, request):
-        """Liest den Refresh aus dem Cookie, blacklistet ihn, leert die Cookies."""
-        refresh_token = request.COOKIES["refresh_token"]
-        blacklist_token(refresh_token)
-
-        response = Response({"detail": "Logout successful!"}, status=status.HTTP_200_OK)
-        delete_auth_cookies(response)
+        """Loggt den User aus: blacklistet das Refresh-Token, falls vorhanden, und löscht beide Cookies immer (idempotent)."""
+        refresh_token = request.COOKIES.get("refresh_token")  # (1) sicher lesen statt hart zugreifen
+        if refresh_token:  # (2) nur wenn ein Cookie da ist
+            try:
+                blacklist_token(refresh_token)  # (3) Versuch — kann bei Müll-Token scheitern
+            except TokenError:
+                pass  # ungültiges Token = keine Sitzung zum Blacklisten; Logout bleibt idempotent
+        response = Response(
+            {"detail": "Log-Out successfully! All Tokens will be deleted. Refresh token is now invalid."},
+            status=status.HTTP_200_OK,
+        )
+        delete_auth_cookies(response)  # läuft jetzt IMMER
         return response
-    
+

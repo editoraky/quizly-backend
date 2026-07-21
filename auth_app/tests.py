@@ -152,3 +152,30 @@ class LogoutTests(APITestCase):
         self.client.post(reverse("logout"))
 
         self.assertEqual(BlacklistedToken.objects.count(), 1)
+
+    def test_logout_without_refresh_token_cookie_still_succeeds(self):
+        """Logout ohne refresh_token-Cookie ist idempotent: 200 + beide Cookies geleert."""
+        # Arrange: eingeloggt aus setUp, aber gezielt NUR den refresh_token entfernen
+        del self.client.cookies["refresh_token"]
+
+        # Act: eine Logout-Anfrage ohne refresh_token trifft ein
+        response = self.client.post(reverse("logout"))
+
+        # Assert: unser idempotenter Contract
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.cookies["access_token"].value, "")
+        self.assertEqual(response.cookies["refresh_token"].value, "")
+
+    def test_logout_with_invalid_refresh_token_cookie_still_succeeds(self):
+        """Logout mit ungültigem refresh_token-Cookie ist idempotent: 200 + beide Cookies geleert."""
+        # Arrange: eingeloggt aus setUp, aber den refresh_token gezielt mit Müll überschreiben
+        self.client.cookies["refresh_token"] = "this-is-not-a-valid-jwt"
+
+        # Act: eine Logout-Anfrage mit ungültigem refresh_token trifft ein
+        response = self.client.post(reverse("logout"))
+
+        # Assert: identischer Idempotenz-Contract wie beim fehlenden Cookie
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.cookies["access_token"].value, "")
+        self.assertEqual(response.cookies["refresh_token"].value, "")
+
