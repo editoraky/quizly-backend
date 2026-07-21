@@ -3,7 +3,7 @@
 from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 
 
@@ -191,6 +191,12 @@ class LogoutTests(APITestCase):
         self.client.cookies["refresh_token"] = refresh_token
         response = self.client.post(reverse("token_refresh"))
 
+        self.assertEqual(response.status_code, 401)
+
+    def test_logout_requires_authentication(self):
+        """Ohne gültiges access_token-Cookie ist Logout geschützt: 401 (Doku Seite 3)."""
+        fresh_client = APIClient()  # nie eingeloggt → kein access_token-Cookie
+        response = fresh_client.post(reverse("logout"))
         self.assertEqual(response.status_code, 401)
 
 

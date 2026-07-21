@@ -1,7 +1,7 @@
 """Views for the authentication endpoints."""
 
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
@@ -18,6 +18,8 @@ class RegistrationView(APIView):
     """Create a new user account."""
 
     permission_classes = [AllowAny]
+    authentication_classes = []  # Register läuft abgemeldet → keine Cookie-Auth
+
 
     def post(self, request):
         """Validate the payload and create the user."""
@@ -32,6 +34,9 @@ class RegistrationView(APIView):
 
 class LoginView(TokenObtainPairView):
     """Log a user in and hand over both JWTs as HttpOnly cookies."""
+
+    authentication_classes = []  # Login läuft abgemeldet → keine Cookie-Auth
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         """Let SimpleJWT authenticate, then move the tokens into cookies."""
@@ -57,6 +62,8 @@ class LoginView(TokenObtainPairView):
 class LogoutView(APIView):
     """Loggt den User aus: blacklistet den Refresh-Token, löscht beide Cookies."""
 
+    permission_classes = [IsAuthenticated]  # Doku Seite 3: geschützt, sonst 401
+
     def post(self, request):
         """Loggt den User aus: blacklistet das Refresh-Token, falls vorhanden, und löscht beide Cookies immer (idempotent)."""
         refresh_token = request.COOKIES.get("refresh_token")  # (1) sicher lesen statt hart zugreifen
@@ -75,6 +82,9 @@ class LogoutView(APIView):
 
 class CookieTokenRefreshView(TokenRefreshView):
     """Erneuert den Access-Token aus dem refresh_token-Cookie und gibt ihn als Cookie zurück."""
+
+    authentication_classes = []  # läuft bei abgelaufenem Access → darf ihn NICHT prüfen
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         """Refresh-Token aus dem Cookie holen, prüfen, neuen Access-Token als Cookie setzen."""

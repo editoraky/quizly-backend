@@ -40,6 +40,12 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": False,
 }
 
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "auth_app.api.authentication.CookieJWTAuthentication",
+    ],
+}
+
 
 # Application definition
 
