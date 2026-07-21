@@ -179,3 +179,33 @@ class LogoutTests(APITestCase):
         self.assertEqual(response.cookies["access_token"].value, "")
         self.assertEqual(response.cookies["refresh_token"].value, "")
 
+
+class TokenRefreshTests(APITestCase):
+    """Tests für POST /api/token/refresh/ — Access-Token aus dem refresh_token-Cookie erneuern."""
+
+    def setUp(self):
+        """User anlegen und über den echten Login-Endpoint einloggen → refresh_token-Cookie im Glas."""
+        self.user = User.objects.create_user(username="quizuser", password="StrongPass123")
+        self.client.post(
+            reverse("login"),
+            {"username": "quizuser", "password": "StrongPass123"},
+        )
+
+    def test_refresh_with_valid_cookie_returns_new_access_token(self):
+        """Gültiges refresh_token-Cookie: 200 + detail + neues access_token-Cookie."""
+        response = self.client.post(reverse("token_refresh"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["detail"], "Token refreshed")
+        self.assertIn("access_token", response.cookies)
+
+    def test_refresh_without_or_invalid_cookie_returns_401(self):
+        """Kein oder ungültiges refresh_token-Cookie: 401 (Doku Seite 4)."""
+        # Fall 1: gar kein refresh_token-Cookie
+        self.client.cookies.pop("refresh_token", None)
+        response = self.client.post(reverse("token_refresh"))
+        self.assertEqual(response.status_code, 401)
+
+        # Fall 2: refresh_token-Cookie vorhanden, aber Müll
+        self.client.cookies["refresh_token"] = "this-is-not-a-valid-jwt"
+        response = self.client.post(reverse("token_refresh"))
+        self.assertEqual(response.status_code, 401)

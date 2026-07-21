@@ -33,3 +33,15 @@ def delete_auth_cookies(response):
     """Löscht beide Auth-Cookies (Spiegel zu set_auth_cookies)."""
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
+
+
+def set_access_cookie(response, access_token):
+    """Set only the access_token as an HttpOnly cookie (used on token refresh)."""
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="Lax",
+    )
+    return response
