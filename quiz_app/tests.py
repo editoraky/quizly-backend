@@ -251,3 +251,57 @@ class QuizDetailTests(APITestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 404)
+
+    def test_patch_requires_authentication(self):
+        """Without an access token cookie the endpoint must answer 401."""
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.patch(url, {"title": "New"}, format="json")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_owner_can_patch_title_and_description(self):
+        """The owner may update title and description."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.patch(
+            url,
+            {"title": "Updated Title", "description": "Updated Description"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.own_quiz.refresh_from_db()
+        self.assertEqual(self.own_quiz.title, "Updated Title")
+        self.assertEqual(self.own_quiz.description, "Updated Description")
+
+    def test_patch_ignores_read_only_fields(self):
+        """video_url must stay unchanged even if the client sends it."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.patch(
+            url,
+            {
+                "title": "Updated Title",
+                "video_url": "https://www.youtube.com/watch?v=hacked",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.own_quiz.refresh_from_db()
+        self.assertEqual(
+            self.own_quiz.video_url,
+            "https://www.youtube.com/watch?v=alice",
+        )
+
+    def test_patch_foreign_quiz_returns_404(self):
+        """Patching someone else's quiz must answer 404."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.foreign_quiz.id])
+
+        response = self.client.patch(url, {"title": "Hacked"}, format="json")
+
+        self.assertEqual(response.status_code, 404)
