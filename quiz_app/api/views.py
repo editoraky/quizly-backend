@@ -18,12 +18,12 @@ class QuizListView(generics.ListAPIView):
         return Quiz.objects.filter(owner=self.request.user)
 
 
-class QuizDetailView(generics.RetrieveUpdateAPIView):
-    """Return or partially update a quiz owned by the authenticated user."""
+class QuizDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Return, partially update or delete a quiz owned by the authenticated user."""
 
     serializer_class = QuizSerializer
     permission_classes = [IsAuthenticated]
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         """Restrict lookups to quizzes belonging to the current user."""

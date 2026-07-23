@@ -305,3 +305,31 @@ class QuizDetailTests(APITestCase):
         response = self.client.patch(url, {"title": "Hacked"}, format="json")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_delete_requires_authentication(self):
+        """Without an access token cookie the endpoint must answer 401."""
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_owner_can_delete_own_quiz(self):
+        """Deleting an own quiz answers 204 and removes it from the database."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Quiz.objects.filter(id=self.own_quiz.id).exists())
+
+    def test_delete_foreign_quiz_returns_404(self):
+        """Deleting someone else's quiz answers 404 and keeps it intact."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.foreign_quiz.id])
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Quiz.objects.filter(id=self.foreign_quiz.id).exists())
