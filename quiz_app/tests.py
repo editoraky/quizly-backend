@@ -333,3 +333,46 @@ class QuizDetailTests(APITestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertTrue(Quiz.objects.filter(id=self.foreign_quiz.id).exists())
+
+
+class QuizCreateTests(APITestCase):
+    """Verify POST /api/quizzes/ creates a quiz from a YouTube URL."""
+
+    def setUp(self):
+        """Create a user and log in so the client holds the token cookie."""
+        self.user = User.objects.create_user(username="alice", password="secret123")
+        self.url = reverse("quiz-list")
+        self.payload = {"url": "https://www.youtube.com/watch?v=example"}
+
+    def login(self):
+        """Log in as alice."""
+        self.client.post(
+            reverse("login"),
+            {"username": "alice", "password": "secret123"},
+            format="json",
+        )
+
+    def test_create_requires_authentication(self):
+        """Without an access token cookie the endpoint must answer 401."""
+        response = self.client.post(self.url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_returns_201_with_full_quiz(self):
+        """The response carries the full quiz, owned by the current user."""
+        self.login()
+
+        response = self.client.post(self.url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["video_url"], self.payload["url"])
+        self.assertTrue(len(response.data["questions"]) > 0)
+        self.assertEqual(Quiz.objects.get(id=response.data["id"]).owner, self.user)
+
+    def test_create_rejects_invalid_url(self):
+        """A malformed URL must answer 400."""
+        self.login()
+
+        response = self.client.post(self.url, {"url": "not-a-url"}, format="json")
+
+        self.assertEqual(response.status_code, 400)

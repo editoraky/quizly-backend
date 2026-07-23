@@ -42,3 +42,9 @@ class QuizSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at"
         ]
+
+
+class QuizCreateSerializer(serializers.Serializer):
+    """Validate the YouTube URL a quiz is generated from."""
+
+    url = serializers.URLField()
