@@ -16,3 +16,14 @@ class QuizListView(generics.ListAPIView):
     def get_queryset(self):
         """Restrict the list to quizzes belonging to the current user."""
         return Quiz.objects.filter(owner=self.request.user)
+
+
+class QuizDetailView(generics.RetrieveAPIView):
+    """Return a single quiz owned by the authenticated user."""
+
+    serializer_class = QuizSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Restrict lookups to quizzes belonging to the current user."""
+        return Quiz.objects.filter(owner=self.request.user)

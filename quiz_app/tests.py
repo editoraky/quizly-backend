@@ -195,3 +195,59 @@ class QuizListTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["title"], "Alice Quiz")
+
+
+class QuizDetailTests(APITestCase):
+    """Verify GET /api/quizzes/{id}/ enforces ownership."""
+
+    def setUp(self):
+        """Create two users with one quiz each."""
+        self.user = User.objects.create_user(username="alice", password="secret123")
+        self.other = User.objects.create_user(username="bob", password="secret123")
+        self.own_quiz = Quiz.objects.create(
+            title="Alice Quiz",
+            description="Quiz Description",
+            video_url="https://www.youtube.com/watch?v=alice",
+            owner=self.user,
+        )
+        self.foreign_quiz = Quiz.objects.create(
+            title="Bob Quiz",
+            description="Quiz Description",
+            video_url="https://www.youtube.com/watch?v=bob",
+            owner=self.other,
+        )
+
+    def login(self):
+        """Log in as alice so the client holds the access token cookie."""
+        self.client.post(
+            reverse("login"),
+            {"username": "alice", "password": "secret123"},
+            format="json",
+        )
+
+    def test_detail_requires_authentication(self):
+        """Without an access token cookie the endpoint must answer 401."""
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_owner_can_retrieve_own_quiz(self):
+        """The owner receives their quiz with 200."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.own_quiz.id])
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["title"], "Alice Quiz")
+
+    def test_foreign_quiz_returns_404(self):
+        """A quiz owned by someone else must be invisible, not forbidden."""
+        self.login()
+        url = reverse("quiz-detail", args=[self.foreign_quiz.id])
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 404)
