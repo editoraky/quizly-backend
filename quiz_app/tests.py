@@ -2,6 +2,8 @@
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APITestCase
 
 from quiz_app.models import Question, Quiz
 
@@ -151,3 +153,45 @@ class QuizSerializerTests(TestCase):
             ["Option A", "Option B", "Option C", "Option D"],
         )
         self.assertEqual(question["answer"], "Option A")
+
+
+class QuizListTests(APITestCase):
+    """Verify GET /api/quizzes/ returns only the authenticated user's quizzes."""
+
+    def setUp(self):
+        """Create two users with one quiz each."""
+        self.user = User.objects.create_user(username="alice", password="secret123")
+        self.other = User.objects.create_user(username="bob", password="secret123")
+        Quiz.objects.create(
+            title="Alice Quiz",
+            description="Quiz Description",
+            video_url="https://www.youtube.com/watch?v=alice",
+            owner=self.user,
+        )
+        Quiz.objects.create(
+            title="Bob Quiz",
+            description="Quiz Description",
+            video_url="https://www.youtube.com/watch?v=bob",
+            owner=self.other,
+        )
+        self.url = reverse("quiz-list")
+
+    def test_list_requires_authentication(self):
+        """Without an access token cookie the endpoint must answer 401."""
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_list_returns_only_own_quizzes(self):
+        """A logged-in user sees exactly one quiz: their own."""
+        self.client.post(
+            reverse("login"),
+            {"username": "alice", "password": "secret123"},
+            format="json",
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["title"], "Alice Quiz")
