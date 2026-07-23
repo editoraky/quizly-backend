@@ -4,9 +4,22 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APITestCase
+from unittest.mock import patch
 
 from quiz_app.models import Question, Quiz
 
+FAKE_QUIZ_DATA = {
+    "title": "Generated Quiz",
+    "description": "A quiz about the video",
+    "questions": [
+        {
+            "question_title": f"Question {number}",
+            "question_options": ["Option A", "Option B", "Option C", "Option D"],
+            "answer": "Option A",
+        }
+        for number in range(1, 11)
+    ],
+}
 
 class QuizModelTests(TestCase):
     """Verify how a Quiz relates to the user who owns it."""
@@ -362,11 +375,14 @@ class QuizCreateTests(APITestCase):
         """The response carries the full quiz, owned by the current user."""
         self.login()
 
-        response = self.client.post(self.url, self.payload, format="json")
+        with patch("quiz_app.api.services.download_audio", return_value="a.mp3"), \
+             patch("quiz_app.api.services.transcribe_audio", return_value="transcript"), \
+             patch("quiz_app.api.services.generate_quiz_data", return_value=FAKE_QUIZ_DATA):
+            response = self.client.post(self.url, self.payload, format="json")
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["video_url"], self.payload["url"])
-        self.assertTrue(len(response.data["questions"]) > 0)
+        self.assertEqual(len(response.data["questions"]), 10)
         self.assertEqual(Quiz.objects.get(id=response.data["id"]).owner, self.user)
 
     def test_create_rejects_invalid_url(self):
