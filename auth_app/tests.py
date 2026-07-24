@@ -128,17 +128,17 @@ class LoginTests(APITestCase):
 
 
 class LogoutTests(APITestCase):
-    """Testet den Logout-Endpoint: 200 + beide Auth-Cookies gelöscht."""
+    """Test the logout endpoint: 200 + both auth cookies deleted."""
 
     def setUp(self):
-        """Legt einen User an und loggt ihn ein, damit der Client die Cookies hält."""
+        """Create a user and log them in so the client holds the cookies."""
         self.user = User.objects.create_user(
             username="tester", email="t@test.de", password="Passwort123"
         )
         self.client.post(reverse("login"), {"username": "tester", "password": "Passwort123"})
 
     def test_logout_returns_200_and_deletes_both_cookies(self):
-        """Logout antwortet mit 200 und leert access_token und refresh_token."""
+        """Logout answers 200 and clears access_token and refresh_token."""
         response = self.client.post(reverse("logout"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -146,7 +146,7 @@ class LogoutTests(APITestCase):
         self.assertEqual(response.cookies["refresh_token"].value, "")
 
     def test_logout_blacklists_the_refresh_token(self):
-        """Nach dem Logout steht genau ein Refresh-Token auf der Blacklist."""
+        """After logout exactly one refresh token is on the blacklist."""
         self.assertEqual(BlacklistedToken.objects.count(), 0)
 
         self.client.post(reverse("logout"))
@@ -154,57 +154,57 @@ class LogoutTests(APITestCase):
         self.assertEqual(BlacklistedToken.objects.count(), 1)
 
     def test_logout_without_refresh_token_cookie_still_succeeds(self):
-        """Logout ohne refresh_token-Cookie ist idempotent: 200 + beide Cookies geleert."""
-        # Arrange: eingeloggt aus setUp, aber gezielt NUR den refresh_token entfernen
+        """Logout without a refresh_token cookie is idempotent: 200 + both cookies cleared."""
+        # Arrange: logged in from setUp, but deliberately remove ONLY the refresh_token
         del self.client.cookies["refresh_token"]
 
-        # Act: eine Logout-Anfrage ohne refresh_token trifft ein
+        # Act: a logout request without a refresh_token arrives
         response = self.client.post(reverse("logout"))
 
-        # Assert: unser idempotenter Contract
+        # Assert: our idempotent contract
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.cookies["access_token"].value, "")
         self.assertEqual(response.cookies["refresh_token"].value, "")
 
     def test_logout_with_invalid_refresh_token_cookie_still_succeeds(self):
-        """Logout mit ungültigem refresh_token-Cookie ist idempotent: 200 + beide Cookies geleert."""
-        # Arrange: eingeloggt aus setUp, aber den refresh_token gezielt mit Müll überschreiben
+        """Logout with an invalid refresh_token cookie is idempotent: 200 + both cookies cleared."""
+        # Arrange: logged in from setUp, but deliberately overwrite the refresh_token with garbage
         self.client.cookies["refresh_token"] = "this-is-not-a-valid-jwt"
 
-        # Act: eine Logout-Anfrage mit ungültigem refresh_token trifft ein
+        # Act: a logout request with an invalid refresh_token arrives
         response = self.client.post(reverse("logout"))
 
-        # Assert: identischer Idempotenz-Contract wie beim fehlenden Cookie
+        # Assert: identical idempotency contract as with the missing cookie
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.cookies["access_token"].value, "")
         self.assertEqual(response.cookies["refresh_token"].value, "")
 
     def test_refresh_impossible_after_logout(self):
-        """Beweist end-to-end: nach Logout ist der Refresh-Token geblacklistet → erneuter Refresh damit ergibt 401."""
-        # den Token-WERT sichern, BEVOR der Logout das Cookie leert — danach käme man nicht mehr dran
+        """Prove end-to-end: after logout the refresh token is blacklisted → refreshing with it again yields 401."""
+        # save the token VALUE BEFORE logout clears the cookie — afterwards it would be unreachable
         refresh_token = self.client.cookies["refresh_token"].value
 
-        # ausloggen: blacklistet genau diesen Token und leert beide Cookies
+        # log out: blacklists exactly this token and clears both cookies
         self.client.post(reverse("logout"))
 
-        # den gesicherten (jetzt toten) Token erneut vorlegen
+        # present the saved (now dead) token again
         self.client.cookies["refresh_token"] = refresh_token
         response = self.client.post(reverse("token_refresh"))
 
         self.assertEqual(response.status_code, 401)
 
     def test_logout_requires_authentication(self):
-        """Ohne gültiges access_token-Cookie ist Logout geschützt: 401 (Doku Seite 3)."""
-        fresh_client = APIClient()  # nie eingeloggt → kein access_token-Cookie
+        """Without a valid access_token cookie logout is protected: 401 (Docs page 3)."""
+        fresh_client = APIClient()  # never logged in → no access_token cookie
         response = fresh_client.post(reverse("logout"))
         self.assertEqual(response.status_code, 401)
 
 
 class TokenRefreshTests(APITestCase):
-    """Tests für POST /api/token/refresh/ — Access-Token aus dem refresh_token-Cookie erneuern."""
+    """Tests for POST /api/token/refresh/ — refresh the access token from the refresh_token cookie."""
 
     def setUp(self):
-        """User anlegen und über den echten Login-Endpoint einloggen → refresh_token-Cookie im Glas."""
+        """Create a user and log in via the real login endpoint → refresh_token cookie in the jar."""
         self.user = User.objects.create_user(username="quizuser", password="StrongPass123")
         self.client.post(
             reverse("login"),
@@ -212,20 +212,20 @@ class TokenRefreshTests(APITestCase):
         )
 
     def test_refresh_with_valid_cookie_returns_new_access_token(self):
-        """Gültiges refresh_token-Cookie: 200 + detail + neues access_token-Cookie."""
+        """Valid refresh_token cookie: 200 + detail + new access_token cookie."""
         response = self.client.post(reverse("token_refresh"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["detail"], "Token refreshed")
         self.assertIn("access_token", response.cookies)
 
     def test_refresh_without_or_invalid_cookie_returns_401(self):
-        """Kein oder ungültiges refresh_token-Cookie: 401 (Doku Seite 4)."""
-        # Fall 1: gar kein refresh_token-Cookie
+        """Missing or invalid refresh_token cookie: 401 (Docs page 4)."""
+        # Case 1: no refresh_token cookie at all
         self.client.cookies.pop("refresh_token", None)
         response = self.client.post(reverse("token_refresh"))
         self.assertEqual(response.status_code, 401)
 
-        # Fall 2: refresh_token-Cookie vorhanden, aber Müll
+        # Case 2: refresh_token cookie present, but garbage
         self.client.cookies["refresh_token"] = "this-is-not-a-valid-jwt"
         response = self.client.post(reverse("token_refresh"))
         self.assertEqual(response.status_code, 401)

@@ -30,7 +30,7 @@ def set_auth_cookies(response, access_token, refresh_token):
 
 
 def delete_auth_cookies(response):
-    """Löscht beide Auth-Cookies (Spiegel zu set_auth_cookies)."""
+    """Delete both auth cookies (mirror of set_auth_cookies)."""
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
 
