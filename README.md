@@ -24,11 +24,22 @@ source .venv/bin/activate     # macOS / Linux
 pip install -r requirements.txt
 ```
 
-Create a file named `.env` in the project root:
+Copy the environment template and fill in the two values:
 
+```bash
+copy .env.template .env      # Windows
+cp .env.template .env        # macOS / Linux
 ```
-GEMINI_API_KEY=your-key-here
+
+Generate your own secret key:
+
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
+
+Paste it into `.env` as `SECRET_KEY` and add your Gemini API key.
+The template already contains the surrounding single quotes — keep them,
+a generated key may contain `#` or `$`.
 
 Then run the migrations, create an admin account and start the server:
 
