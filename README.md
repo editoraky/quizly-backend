@@ -81,6 +81,15 @@ Authentication uses JWT delivered as HttpOnly cookies. No `Authorization`
 header is required or accepted. Quizzes are private: requesting a quiz owned
 by another user returns 404.
 
+Quiz creation runs a download, a transcription and an AI request, so it fails
+for more reasons than a malformed URL. The status code says whose side the
+problem is on:
+
+| Status | Meaning |
+|---|---|
+| 400 | The URL is malformed, or the video cannot be downloaded — deleted, private or region locked. |
+| 503 | A step of the pipeline is unavailable: FFMPEG is missing, the audio cannot be transcribed, or the AI service is unreachable. The reason is written to the log. |
+
 ## Tests
 
 ```bash
