@@ -1,6 +1,8 @@
 """Serializers for user registration."""
 
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 
@@ -24,11 +26,24 @@ class RegistrationSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Reject a confirmation that does not match the password."""
+        """Reject a mismatching confirmation or a password Django rates as weak.
+
+        AUTH_PASSWORD_VALIDATORS only run where the code calls them, so without
+        this the endpoint would accept "abc" while createsuperuser refuses it.
+        The unsaved user carries username and email, which is what the
+        similarity validator compares the password against.
+        """
         if attrs["password"] != attrs["confirmed_password"]:
             raise serializers.ValidationError(
                 {"password": "Passwords do not match."}
             )
+        candidate = User(username=attrs["username"], email=attrs["email"])
+        try:
+            validate_password(attrs["password"], candidate)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(
+                {"password": list(error.messages)}
+            ) from error
         return attrs
 
     def create(self, validated_data):

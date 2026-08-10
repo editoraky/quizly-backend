@@ -16,8 +16,8 @@ class RegistrationTests(APITestCase):
         self.payload = {
             "username": "tester",
             "email": "tester@example.com",
-            "password": "secret123",
-            "confirmed_password": "secret123",
+            "password": "SecurePass123",
+            "confirmed_password": "SecurePass123",
         }
 
     def test_registration_creates_a_user(self):
@@ -33,8 +33,8 @@ class RegistrationTests(APITestCase):
         self.client.post(self.url, self.payload, format="json")
 
         user = User.objects.get(username="tester")
-        self.assertNotEqual(user.password, "secret123")
-        self.assertTrue(user.check_password("secret123"))
+        self.assertNotEqual(user.password, "SecurePass123")
+        self.assertTrue(user.check_password("SecurePass123"))
 
     def test_mismatched_confirmation_is_rejected(self):
         """A confirmation that differs from the password creates no user."""
@@ -44,6 +44,24 @@ class RegistrationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(User.objects.count(), 0)
+
+    def test_weak_password_is_rejected(self):
+        """AUTH_PASSWORD_VALIDATORS apply to registration, not only to the shell.
+
+        Django runs them only where they are called, so this test is the proof
+        that the endpoint calls them. Each password fails a different validator:
+        too short, too common, entirely numeric.
+        """
+        for weak in ["abc", "password", "12345678"]:
+            with self.subTest(password=weak):
+                self.payload["password"] = weak
+                self.payload["confirmed_password"] = weak
+
+                response = self.client.post(self.url, self.payload, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("password", response.data)
+                self.assertEqual(User.objects.count(), 0)
 
     def test_duplicate_email_is_rejected(self):
         """An email that is already taken creates no second user."""
