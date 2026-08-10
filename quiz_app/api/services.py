@@ -5,11 +5,22 @@ import tempfile
 from django.db import transaction
 
 from quiz_app.models import Quiz, Question
-from quiz_app.api.utils import download_audio, transcribe_audio, generate_quiz_data
+from quiz_app.api.utils import (
+    download_audio,
+    ensure_ffmpeg_available,
+    generate_quiz_data,
+    transcribe_audio,
+)
 
 
 def create_quiz_from_url(url, user):
-    """Create a quiz from a YouTube video via the AI pipeline."""
+    """Create a quiz from a YouTube video via the AI pipeline.
+
+    The FFMPEG check runs first on purpose: it costs a millisecond, while
+    everything after it costs minutes and a download nobody needs if the
+    conversion cannot happen anyway.
+    """
+    ensure_ffmpeg_available()
     with tempfile.TemporaryDirectory() as workdir:
         audio_path = download_audio(url, workdir)
         transcript = transcribe_audio(audio_path)

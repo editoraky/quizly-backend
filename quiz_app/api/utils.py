@@ -1,6 +1,7 @@
 """Technical helpers for the quiz generation pipeline."""
 
 import json
+import shutil
 from pathlib import Path
 
 import whisper
@@ -16,6 +17,19 @@ from quiz_app.api.exceptions import PipelineUnavailable, VideoUnavailable
 GEMINI_MODEL = "gemini-3.6-flash"
 WHISPER_MODEL = "base"
 QUESTION_COUNT = 10
+
+
+def ensure_ffmpeg_available():
+    """Stop the pipeline before it starts when FFMPEG is missing.
+
+    FFMPEG is a system requirement and appears in no import and in no
+    requirements entry. Without this check a missing binary surfaces much
+    later, as a yt-dlp PostProcessingError — one of the errors raised for a
+    video that cannot be fetched, which would blame the submitted URL for a
+    problem with the installation.
+    """
+    if shutil.which("ffmpeg") is None:
+        raise PipelineUnavailable("FFMPEG is not installed or not on the PATH.")
 
 
 def download_options(target):

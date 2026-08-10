@@ -13,7 +13,13 @@ from google.genai.errors import APIError
 from yt_dlp.utils import DownloadError
 
 from quiz_app.api.exceptions import PipelineUnavailable, VideoUnavailable
-from quiz_app.api.utils import download_audio, generate_quiz_data, transcribe_audio
+from quiz_app.api.services import create_quiz_from_url
+from quiz_app.api.utils import (
+    download_audio,
+    ensure_ffmpeg_available,
+    generate_quiz_data,
+    transcribe_audio,
+)
 
 
 class DownloadErrorTests(SimpleTestCase):
@@ -79,3 +85,32 @@ class GenerationErrorTests(SimpleTestCase):
 
             with self.assertRaises(PipelineUnavailable):
                 generate_quiz_data("transcript")
+
+
+class MissingFfmpegTests(SimpleTestCase):
+    """FFMPEG is a system requirement, not a Python package.
+
+    yt-dlp reports a missing binary as a PostProcessingError, which belongs to
+    the family it raises for videos it cannot fetch — the failure would read
+    like a bad URL and answer 400. The check moves that decision to the front.
+    """
+
+    def test_missing_ffmpeg_is_reported_as_pipeline_unavailable(self):
+        """which() returns None when the binary is nowhere on the PATH."""
+        with patch("quiz_app.api.utils.shutil.which", return_value=None):
+            with self.assertRaises(PipelineUnavailable):
+                ensure_ffmpeg_available()
+
+    def test_pipeline_stops_before_downloading_anything(self):
+        """The check has to run first, otherwise it changes nothing.
+
+        Running it after the download would let yt-dlp fail first and classify
+        the missing binary as a problem with the video.
+        """
+        with patch("quiz_app.api.utils.shutil.which", return_value=None), \
+             patch("quiz_app.api.services.download_audio") as download:
+
+            with self.assertRaises(PipelineUnavailable):
+                create_quiz_from_url("https://www.youtube.com/watch?v=any", None)
+
+            download.assert_not_called()
