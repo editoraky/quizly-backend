@@ -8,12 +8,17 @@ ends as a 500, no matter whose fault it was.
 
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.contrib.auth.models import User
+from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
+from rest_framework.test import APITestCase
 from google.genai.errors import APIError
 from yt_dlp.utils import DownloadError
 
 from quiz_app.api.exceptions import PipelineUnavailable, VideoUnavailable
 from quiz_app.api.services import create_quiz_from_url
+from quiz_app.models import Quiz
+from quiz_app.tests.fixtures import FAKE_QUIZ_DATA
 from quiz_app.api.utils import (
     download_audio,
     ensure_ffmpeg_available,
@@ -114,3 +119,87 @@ class MissingFfmpegTests(SimpleTestCase):
                 create_quiz_from_url("https://www.youtube.com/watch?v=any", None)
 
             download.assert_not_called()
+
+
+class PipelineErrorResponseTests(APITestCase):
+    """What the client sees when a step of the pipeline fails."""
+
+    def setUp(self):
+        """Log in, so the endpoint answers about the pipeline and not about auth."""
+        User.objects.create_user(username="alice", password="SecurePass123")
+        self.client.post(
+            reverse("login"),
+            {"username": "alice", "password": "SecurePass123"},
+            format="json",
+        )
+        self.url = reverse("quiz-list")
+        self.payload = {"url": "https://www.youtube.com/watch?v=example"}
+
+    def test_unavailable_video_answers_400(self):
+        """A video nobody can download is a problem with the submitted URL."""
+        with patch(
+            "quiz_app.api.views.create_quiz_from_url",
+            side_effect=VideoUnavailable("The video could not be downloaded."),
+        ):
+            response = self.client.post(self.url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("could not be downloaded", str(response.data))
+
+    def test_unavailable_pipeline_answers_503(self):
+        """A broken step is our problem, so it must not be blamed on the input."""
+        with patch(
+            "quiz_app.api.views.create_quiz_from_url",
+            side_effect=PipelineUnavailable("The quiz service is not available."),
+        ):
+            response = self.client.post(self.url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, 503)
+
+    def test_the_reason_goes_to_the_log_not_to_the_client(self):
+        """503 answers stay neutral; the detail belongs in the operator's log.
+
+        An exception message can carry internal information — a key, a host, a
+        quota. The client gets a sentence it can act on, the log gets the rest.
+        """
+        with self.assertLogs("quiz_app.api.views", level="ERROR") as captured:
+            with patch(
+                "quiz_app.api.views.create_quiz_from_url",
+                side_effect=PipelineUnavailable("invalid api key abc123"),
+            ):
+                response = self.client.post(self.url, self.payload, format="json")
+
+        self.assertNotIn("abc123", str(response.data))
+        self.assertIn("abc123", "\n".join(captured.output))
+
+    def test_missing_ffmpeg_answers_503_through_the_endpoint(self):
+        """The whole chain, from the check to the status code."""
+        with patch("quiz_app.api.utils.shutil.which", return_value=None):
+            response = self.client.post(self.url, self.payload, format="json")
+
+        self.assertEqual(response.status_code, 503)
+
+
+class PartialSaveTests(TestCase):
+    """A failure while saving must not leave a fragment behind."""
+
+    def test_failure_while_saving_questions_leaves_no_quiz(self):
+        """The quiz row is written first, the questions after it.
+
+        Without the atomic block in _save_quiz a failure at the third question
+        would leave a quiz with two questions in the database: visible in the
+        list, unusable in the game.
+        """
+        user = User.objects.create_user(username="alice", password="SecurePass123")
+
+        with patch("quiz_app.api.services.download_audio", return_value="a.mp3"), \
+             patch("quiz_app.api.services.transcribe_audio", return_value="text"), \
+             patch("quiz_app.api.services.generate_quiz_data", return_value=FAKE_QUIZ_DATA), \
+             patch("quiz_app.api.services.ensure_ffmpeg_available"), \
+             patch("quiz_app.api.services.Question.objects.create") as create_question:
+            create_question.side_effect = [None, None, OSError("database is locked")]
+
+            with self.assertRaises(OSError):
+                create_quiz_from_url("https://www.youtube.com/watch?v=any", user)
+
+        self.assertEqual(Quiz.objects.count(), 0)
