@@ -1,5 +1,6 @@
 """Tests for the authentication endpoints."""
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
@@ -235,6 +236,18 @@ class TokenRefreshTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["detail"], "Token refreshed")
         self.assertIn("access_token", response.cookies)
+
+    def test_refreshed_access_cookie_keeps_the_login_lifetime(self):
+        """The refreshed cookie must not silently become a session cookie.
+
+        Without max_age the browser drops it when the window closes, so the
+        same token would live for different lengths depending on whether it
+        came from the login or from a refresh.
+        """
+        response = self.client.post(reverse("token_refresh"))
+
+        expected = int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds())
+        self.assertEqual(int(response.cookies["access_token"]["max-age"]), expected)
 
     def test_refresh_without_or_invalid_cookie_returns_401(self):
         """Missing or invalid refresh_token cookie: 401 (Docs page 4)."""

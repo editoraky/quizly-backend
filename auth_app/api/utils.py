@@ -36,12 +36,15 @@ def delete_auth_cookies(response):
 
 
 def set_access_cookie(response, access_token):
-    """Set only the access_token as an HttpOnly cookie (used on token refresh)."""
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=not settings.DEBUG,
-        samesite="Lax",
+    """Set only the access_token as an HttpOnly cookie (used on token refresh).
+
+    Reuses set_token_cookie so the cookie carries the same max_age as the one
+    handed out at login. Without it the refreshed cookie would be a session
+    cookie and disappear when the browser closes, giving the same token two
+    different lifetimes depending on how it was issued.
+    """
+    set_token_cookie(
+        response, "access_token", access_token,
+        settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"],
     )
     return response
